@@ -1,0 +1,336 @@
+window.PORTPICK_CATALOG = {
+  "products": [
+    {
+      "id": "water",
+      "name": "天然飲用水",
+      "english": "Drinking water",
+      "category": "飲品",
+      "price": 42,
+      "packUnits": 24,
+      "unit": "500 ml 瓶",
+      "unitWeight": 0.5,
+      "sizes": [
+        6,
+        12,
+        24
+      ],
+      "art": "water",
+      "color": "#dce8e3",
+      "stock": {
+        "futian": 96,
+        "qianhai": 72
+      }
+    },
+    {
+      "id": "oat",
+      "name": "燕麥飲",
+      "english": "Oat drink",
+      "category": "飲品",
+      "price": 58,
+      "packUnits": 6,
+      "unit": "1 L 盒",
+      "unitWeight": 1,
+      "sizes": [
+        1,
+        3,
+        6
+      ],
+      "art": "oat",
+      "color": "#eee5cd",
+      "stock": {
+        "futian": 24,
+        "qianhai": 0
+      }
+    },
+    {
+      "id": "cereal",
+      "name": "蜂蜜燕麥穀物",
+      "english": "Honey oat cereal",
+      "category": "早餐與零食",
+      "price": 76,
+      "packUnits": 2,
+      "unit": "700 g 袋",
+      "unitWeight": 0.7,
+      "sizes": [
+        1,
+        2
+      ],
+      "art": "cereal",
+      "color": "#eddbbb",
+      "stock": {
+        "futian": 8,
+        "qianhai": 6
+      }
+    },
+    {
+      "id": "noodles",
+      "name": "獨立包裝麵食",
+      "english": "Wheat noodles",
+      "category": "早餐與零食",
+      "price": 49,
+      "packUnits": 12,
+      "unit": "獨立包",
+      "unitWeight": 0.2,
+      "sizes": [
+        3,
+        6,
+        12
+      ],
+      "art": "noodles",
+      "color": "#e9d9c4",
+      "stock": {
+        "futian": 48,
+        "qianhai": 36
+      }
+    },
+    {
+      "id": "towels",
+      "name": "廚房紙巾",
+      "english": "Paper towels",
+      "category": "家居用品",
+      "price": 68,
+      "packUnits": 12,
+      "unit": "卷",
+      "unitWeight": 0.3,
+      "sizes": [
+        3,
+        6,
+        12
+      ],
+      "art": "towels",
+      "color": "#e3e6de",
+      "stock": {
+        "futian": 48,
+        "qianhai": 36
+      }
+    },
+    {
+      "id": "detergent",
+      "name": "濃縮洗衣液",
+      "english": "Laundry liquid",
+      "category": "家居用品",
+      "price": 95,
+      "packUnits": 1,
+      "unit": "2 L 瓶",
+      "unitWeight": 2.2,
+      "sizes": [
+        1
+      ],
+      "art": "detergent",
+      "color": "#dce4d5",
+      "stock": {
+        "futian": 4,
+        "qianhai": 0
+      }
+    },
+    {
+      "id": "coffee",
+      "name": "研磨咖啡",
+      "english": "Ground coffee",
+      "category": "早餐與零食",
+      "price": 108,
+      "packUnits": 1,
+      "unit": "900 g 袋",
+      "unitWeight": 0.9,
+      "sizes": [
+        1
+      ],
+      "art": "coffee",
+      "color": "#dfd2c3",
+      "stock": {
+        "futian": 4,
+        "qianhai": 3
+      }
+    },
+    {
+      "id": "shampoo",
+      "name": "日常洗髮水",
+      "english": "Daily shampoo",
+      "category": "個人護理",
+      "price": 72,
+      "packUnits": 2,
+      "unit": "650 ml 瓶",
+      "unitWeight": 0.7,
+      "sizes": [
+        1,
+        2
+      ],
+      "art": "shampoo",
+      "color": "#eadcdd",
+      "stock": {
+        "futian": 8,
+        "qianhai": 6
+      }
+    },
+    {
+      "id": "almonds",
+      "name": "烘焙杏仁",
+      "english": "Roasted almonds",
+      "category": "早餐與零食",
+      "price": 86,
+      "packUnits": 1,
+      "unit": "700 g 袋",
+      "unitWeight": 0.7,
+      "sizes": [
+        1
+      ],
+      "art": "almonds",
+      "color": "#e6d9bf",
+      "stock": {
+        "futian": 4,
+        "qianhai": 3
+      }
+    },
+    {
+      "id": "tissues",
+      "name": "柔軟面紙",
+      "english": "Facial tissues",
+      "category": "家居用品",
+      "price": 52,
+      "packUnits": 10,
+      "unit": "盒",
+      "unitWeight": 0.22,
+      "sizes": [
+        2,
+        5,
+        10
+      ],
+      "art": "tissues",
+      "color": "#e0e7e5",
+      "stock": {
+        "futian": 40,
+        "qianhai": 0
+      }
+    },
+    {
+      "id": "chips",
+      "name": "海鹽薯片",
+      "english": "Sea salt crisps",
+      "category": "早餐與零食",
+      "price": 69,
+      "packUnits": 18,
+      "unit": "獨立小袋",
+      "unitWeight": 0.117,
+      "sizes": [
+        3,
+        6,
+        18
+      ],
+      "art": "chips",
+      "color": "#eee2c8",
+      "stock": {
+        "futian": 72,
+        "qianhai": 54
+      }
+    },
+    {
+      "id": "soap",
+      "name": "洗手液補充裝",
+      "english": "Hand soap refill",
+      "category": "個人護理",
+      "price": 55,
+      "packUnits": 3,
+      "unit": "500 ml 袋",
+      "unitWeight": 0.53,
+      "sizes": [
+        1,
+        3
+      ],
+      "art": "soap",
+      "color": "#dce5d7",
+      "stock": {
+        "futian": 12,
+        "qianhai": 9
+      }
+    }
+  ],
+  "stores": [
+    {
+      "id": "futian",
+      "name": "深圳福田店",
+      "lat": 22.544779,
+      "lng": 114.013013,
+      "address": "廣東省深圳市福田區侨香路与农林路交界东南的深国投商业中心一层、二层及负一层"
+    },
+    {
+      "id": "qianhai",
+      "name": "深圳前海店",
+      "lat": 22.535,
+      "lng": 113.905,
+      "address": "廣東省深圳市南山區桂灣三路1號前海山姆會員商店"
+    }
+  ],
+  "ports": [
+    {
+      "id": "luohu",
+      "name": "羅湖口岸",
+      "lat": 22.53222,
+      "lng": 114.11333
+    },
+    {
+      "id": "futian",
+      "name": "福田口岸",
+      "lat": 22.518457,
+      "lng": 114.064371
+    },
+    {
+      "id": "huanggang",
+      "name": "皇崗口岸",
+      "lat": 22.5242265,
+      "lng": 114.0692511
+    },
+    {
+      "id": "shenzhenbay",
+      "name": "深圳灣口岸",
+      "lat": 22.501991,
+      "lng": 113.949848
+    }
+  ],
+  "packaging": [
+    {
+      "id": "original",
+      "name": "保留原廠密封包裝",
+      "fee": 0
+    },
+    {
+      "id": "carry",
+      "name": "加購外提袋（不拆封）",
+      "fee": 2
+    }
+  ],
+  "tiers": [
+    [
+      5,
+      5
+    ],
+    [
+      10,
+      8
+    ],
+    [
+      15,
+      12
+    ],
+    [
+      20,
+      16
+    ],
+    [
+      99999,
+      20
+    ]
+  ],
+  "stage1": {
+    "serviceFeeBasisPoints": 2000,
+    "campuses": [
+      {
+        "id": "cityuhk",
+        "name": "CityUHK 校園自提點（模擬）",
+        "location": "香港城市大學校園 · 模擬自提點",
+        "simulated": true
+      }
+    ],
+    "minimumHKD": 100,
+    "cnyToHKD": 1.1
+  }
+};
