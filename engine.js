@@ -38,19 +38,76 @@
     const lines = cart.map(line => {
       const p = catalog.products.find(x => x.id === line.productId);
       const pack = catalog.packaging.find(x => x.id === line.packaging);
-      if (!p || !pack || !p.sizes.includes(line.units) || !Number.isInteger(line.quantity) || line.quantity < 1 || line.quantity > 100)
+      const sale = p && saleSpec(p);
+      const validUnits = line.saleVersion === 2 ? line.units === sale?.units : p?.sizes.includes(line.units);
+      if (!p || !pack || !validUnits || !Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > (sale?.maxQuantity || 100))
         throw Error('商品規格或數量無效');
       used[p.id] = (used[p.id] || 0) + line.units * line.quantity;
+      if (line.saleVersion===2 && used[p.id]/sale.units>sale.maxQuantity) throw Error(p.name+' 超出限購數量');
       if (used[p.id] > p.stock[storeId]) throw Error(p.name + ' 超出所選門店的示例庫存');
       const unitCents = Math.round(Math.round(p.price * 100) * line.units / p.packUnits);
       const amount = unitCents * line.quantity;
-      const packAmount = Math.round(pack.fee * 100) * line.quantity;
+      const packagingQuantity = line.saleVersion === 2 ? (line.packagingQuantity ?? 1) : line.quantity;
+      if (!Number.isSafeInteger(packagingQuantity) || packagingQuantity < 1 || packagingQuantity > 100) throw Error('分裝數量無效');
+      const packAmount = Math.round(pack.fee * 100) * packagingQuantity;
       subtotal += amount;
       packaging += packAmount;
-      return {...line, name:p.name, image:{art:p.art,color:p.color,english:p.english}, unit:p.unit, unitPrice:unitCents/100, packagingName:pack.name,
+      return {...line, currency:catalog.currency || 'CNY', saleLabel:line.saleVersion===2?sale.label:null, purchaseUnits:p.packUnits, batch:p.batch?{...p.batch}:null, packagingQuantity, name:p.name, image:{art:p.art,color:p.color,english:p.english}, unit:p.unit, unitPrice:unitCents/100, packagingName:pack.name,
         packagingUnitPrice:pack.fee, productAmount:amount/100, packagingAmount:packAmount/100};
     });
-    return {...fees(subtotal, packaging, catalog.stage1.serviceFeeBasisPoints), threshold:minimum(subtotal,catalog.stage1), store:{...store}, port:routes(store,[port])[0], lines};
+    return {...fees(subtotal, packaging, catalog.stage1.serviceFeeBasisPoints), currency:catalog.currency || 'CNY', threshold:minimum(subtotal,{...catalog.stage1,cnyToHKD:catalog.currency==='HKD'?1:catalog.stage1.cnyToHKD}), store:{...store}, port:routes(store,[port])[0], lines};
+  }
+  function saleSpec(p) {
+    return p.sale || {units:p.packUnits,label:'包',maxQuantity:100};
+  }
+  function migrateCart(cart, catalog) {
+    const result=[];
+    for (const line of cart) {
+      const p=catalog.products.find(p=>p.id===line.productId);
+      if (!p || line.saleVersion===2) {result.push({...line});continue;}
+      const sale=saleSpec(p), quantity=line.units*line.quantity/sale.units;
+      if (!Number.isSafeInteger(quantity)) {result.push({...line});continue;}
+      const existing=result.find(x=>x.productId===line.productId&&x.packaging===line.packaging&&x.saleVersion===2);
+      if (existing) {existing.quantity+=quantity;existing.packagingQuantity+=line.quantity;}
+      else result.push({...line,saleVersion:2,units:sale.units,quantity,packagingQuantity:line.quantity});
+    }
+    return result;
+  }
+  function dateNumber(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value||'')) return null;
+    const at=Date.parse(value+'T00:00:00Z');
+    return Number.isFinite(at)&&new Date(at).toISOString().slice(0,10)===value ? at/86400000 : null;
+  }
+  function pickupDate(value) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value||'')) return dateNumber(value)===null?null:value;
+    if (!value || !Number.isFinite(Date.parse(value))) return null;
+    const p=hkParts(new Date(value));return p.year+'-'+p.month+'-'+p.day;
+  }
+  function daysRemaining(product, pickup) {
+    const end=dateNumber(product.batch?.markedDate), start=dateNumber(pickupDate(pickup));
+    return end===null||start===null?null:end-start;
+  }
+  function shelfAdvice(catalog, cart, pickup) {
+    const rules=catalog.stage1.shelfLife, grouped=new Map();
+    for (const line of cart) {
+      const p=catalog.products.find(p=>p.id===line.productId);
+      if (!p) continue;
+      const quantity=line.units*line.quantity/saleSpec(p).units;
+      if (grouped.has(p.id)) grouped.get(p.id).quantity+=quantity;
+      else grouped.set(p.id,{id:p.id,name:p.name,label:saleSpec(p).label,quantity,days:daysRemaining(p,pickup),batch:p.batch||null});
+    }
+    const entries=[...grouped.values()];
+    const short=entries.filter(e=>e.days!==null&&e.days>=0&&e.days<=rules.shortDays);
+    const combined=short.length>=rules.combinedProducts&&short.reduce((s,e)=>s+e.quantity,0)>=rules.combinedQuantity;
+    return {pickup:pickupDate(pickup),entries,expired:entries.filter(e=>e.days!==null&&e.days<0),
+      reminders:short.filter(e=>combined||e.quantity>=rules.singleQuantity),combined};
+  }
+  function alternatives(catalog, productId, pickup, stock) {
+    const source=catalog.products.find(p=>p.id===productId), days=source&&daysRemaining(source,pickup);
+    if (days==null || days<0) return [];
+    return catalog.products.filter(p=>p.id!==productId&&p.category===source.category&&stock(p)>=saleSpec(p).units&&
+      daysRemaining(p,pickup)!==null&&daysRemaining(p,pickup)>days&&daysRemaining(p,pickup)>=0)
+      .sort((a,b)=>daysRemaining(b,pickup)-daysRemaining(a,pickup));
   }
   function add(cart, item) {
     const next = cart.map(x => ({...x}));
@@ -79,12 +136,13 @@
     const tomorrow=new Date(Date.UTC(+p.year,+p.month-1,+p.day+1,4));
     const slots=[];
     for(let day=0;day<=config.horizonDays;day++) {
+      if(day===0 && currentHour>=config.dawnStartHour && currentHour<config.dawnEndHour)continue;
       const base=day===0?now:tomorrow;
       const date=day===0?hkParts(now):hkParts(new Date(tomorrow.getTime()+(day-1)*86400000));
       for(let minute=config.earliestHour*60;minute+config.slotMinutes<=config.latestHour*60;minute+=config.slotMinutes) {
         const start=hkDateAt(new Date(Date.UTC(+date.year,+date.month-1,+date.day,12)),Math.floor(minute/60),minute%60);
         const end=new Date(start.getTime()+config.slotMinutes*60000);
-        if(start<=now || (day===0 && (start<earliestToday || currentHour<config.dawnEndHour)))continue;
+        if(start<=now || (day===0 && start<earliestToday))continue;
         slots.push({start:start.toISOString(),end:end.toISOString(),date:`${date.year}-${date.month}-${date.day}`});
       }
     }
@@ -107,5 +165,5 @@
       h.ask <= request.offer && Date.parse(h.time) > Date.now() && Math.abs(Date.parse(h.time)-time) <= 7200000)
       .sort((a,b) => a.ask-b.ask);
   }
-  return {money, minimum, routes, fees, quote, add, advance, stages, matches, DELIVERY, hkParts, hkDateAt, deliverySlots, deliverySelection};
+  return {saleSpec, migrateCart, pickupDate, daysRemaining, shelfAdvice, alternatives, money, minimum, routes, fees, quote, add, advance, stages, matches, DELIVERY, hkParts, hkDateAt, deliverySlots, deliverySelection};
 });

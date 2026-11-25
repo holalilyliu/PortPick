@@ -1,8 +1,15 @@
 'use strict';
-const C = window.PORTPICK_CATALOG, E = window.PortPick;
+const C = structuredClone(window.PORTPICK_CATALOG), E = window.PortPick;
+const shelfDemo = new URLSearchParams(location.search).get('demo') === 'shelf';
+if (shelfDemo) {
+  C.products=C.shelfLifeDemo.products;
+  C.currency=C.shelfLifeDemo.currency;
+  C.stage1.minimumHKD=C.shelfLifeDemo.minimumHKD;
+}
+const currency=C.currency || 'CNY';
 const $ = id => document.getElementById(id);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt = n => Number.isFinite(n) ? 'CNY ' + n.toFixed(2) : '未記錄';
+const fmt = (n, code=currency) => Number.isFinite(n) ? (code==='HKD'?'HK$':code+' ') + n.toFixed(2) : '未記錄';
 const mode = 'stage1';
 const prefix = 'portpick-stage1:', sessionKey = prefix + 'account', orderPrefix = prefix + 'order:';
 const uid = () => crypto.randomUUID?.() || Array.from(crypto.getRandomValues(new Uint32Array(3)), n=>n.toString(36)).join('-');
@@ -18,9 +25,11 @@ function readJSON(key, fallback) {
 let account = sessionStorage.getItem(sessionKey) || '';
 let category='全部', sort='recommended', study=null, toastTimer, selectedOrder=null;
 let legacySessionOrders=[], legacyV1=[], accountSequence=0;
-const draftKey = () => prefix + (account ? 'draft:'+account : 'guest-draft');
+const draftKey = () => prefix + (account ? 'draft:'+account : 'guest-draft') + (shelfDemo?':shelf-demo':'');
 function loadDraft() {
-  return Object.assign({store:'futian',port:E.routes(C.stores[0],C.ports)[0].id,cart:[],campus:'',studies:[],draftId:uid()}, readJSON(draftKey(),{}));
+  const draft=Object.assign({store:'futian',port:E.routes(C.stores[0],C.ports)[0].id,cart:[],campus:'',studies:[],draftId:uid()}, readJSON(draftKey(),{}));
+  draft.cart=E.migrateCart(draft.cart,C);
+  return draft;
 }
 let state = loadDraft();
 function save() { localStorage.setItem(draftKey(), JSON.stringify(state)); }
@@ -53,10 +62,77 @@ function checkCart(cart, store=state.store) {
   }
   return q;
 }
-let googleMap=null, mapMarkers=[];
-function renderStoreCards(routes,selected){const root=$('store-cards');root.innerHTML=C.stores.map(store=>{const best=E.routes(store,C.ports)[0];const chosen=store.id===state.store;return `<button class="store-card ${chosen?'selected':''}" data-store-card="${esc(store.id)}"><span class="store-icon">▣</span><span><strong>${esc(store.id==='futian'?"Sam's Club Futian":"Sam's Club Qianhai")}</strong><b>${esc(store.name)}</b><small>${store.address||'地址未記錄'}</small><small>${best.name} · ${best.km.toFixed(1)} km 直線</small>${store.id===state.store?'<em>目前選中 · 推薦口岸 '+esc(best.name)+'</em>':''}</span>${chosen?'<i>✓</i>':''}</button>`}).join('');root.querySelectorAll('[data-store-card]').forEach(b=>b.onclick=()=>{const id=b.dataset.storeCard;try{checkCart(state.cart,id);state.store=id;state.port=E.routes(C.stores.find(s=>s.id===id),C.ports)[0].id;save();route();renderProducts();}catch(e){toast(e.message);}});}
-function updateMap(routes,selected){if(!googleMap)return;const store=C.stores.find(s=>s.id===state.store),port=C.ports.find(p=>p.id===state.port);mapMarkers.forEach(m=>m.setMap(null));mapMarkers=[];const bounds=new google.maps.LatLngBounds();for(const item of [...C.stores,...C.ports]){const marker=new google.maps.Marker({map:googleMap,position:{lat:item.lat,lng:item.lng},title:item.name,icon:item.id===store.id?'https://maps.google.com/mapfiles/ms/icons/green-dot.png':undefined});mapMarkers.push(marker);bounds.extend(marker.getPosition());}mapMarkers.push(new google.maps.Polyline({map:googleMap,path:[{lat:store.lat,lng:store.lng},{lat:port.lat,lng:port.lng}],geodesic:true,strokeColor:'#566848',strokeWeight:4}));const info=new google.maps.InfoWindow({content:`<strong>${esc(port.name)}</strong><br>${selected.km.toFixed(1)} km · 直線距離`,position:{lat:(store.lat+port.lat)/2,lng:(store.lng+port.lng)/2}});info.open({map:googleMap});mapMarkers.push(info);googleMap.fitBounds(bounds);}
-window.initPortPickMap=()=>{const key=window.PORTPICK_MAPS_API_KEY||C.googleMapsApiKey;if(!key){$('map-config-note').hidden=false;return;}googleMap=new google.maps.Map($('store-map'),{center:{lat:22.53,lng:114.01},zoom:11,mapTypeControl:false,streetViewControl:false});$('map-config-note').hidden=true;route();};
+function selectStore(id) {
+  const store = C.stores.find(item => item.id === id);
+  try {
+    checkCart(state.cart, id);
+    state.store = id;
+    state.port = E.routes(store, C.ports)[0].id;
+    save();
+    route();
+    renderProducts();
+  } catch (error) {
+    $('store').value = state.store;
+    toast(error.message);
+  }
+}
+
+function renderStoreCards() {
+  const root = $('store-cards');
+  const focusedId = document.activeElement?.dataset.storeCard;
+  root.innerHTML = C.stores.map(store => {
+    const routes = E.routes(store, C.ports);
+    const best = routes[0];
+    const via = routes.find(port => port.id === state.port);
+    const chosen = store.id === state.store;
+    return `<button type="button" class="store-card ${chosen?'selected':''}" data-store-card="${esc(store.id)}" aria-pressed="${chosen}">
+      <span class="store-icon">▣</span><span><strong>${store.id==='futian'?"Sam's Club Futian":"Sam's Club Qianhai"}</strong>
+      <b>${esc(store.name)}</b><small>${esc(store.address||'地址未記錄')}</small>
+      <small>${esc(via.name)} · 約 ${via.km.toFixed(1)} km，直線距離</small>
+      ${chosen?'<em>目前選中 · 推薦口岸 '+esc(best.name)+'</em>':''}</span>${chosen?'<i>✓</i>':''}</button>`;
+  }).join('');
+  if (focusedId) root.querySelector(`[data-store-card="${CSS.escape(focusedId)}"]`)?.focus({preventScroll:true});
+}
+$('store-cards').onclick = event => {
+  const button = event.target.closest('[data-store-card]');
+  if (button) selectStore(button.dataset.storeCard);
+};
+
+const mapLayout = window.PORTPICK_STORE_MAP;
+function mapPosition(point) {
+  return `left:${point.x/mapLayout.width*100}%;top:${point.y/mapLayout.height*100}%`;
+}
+function initStoreDiagram() {
+  $('store-map').innerHTML = `<img class="map-base" src="${esc(mapLayout.background)}" alt="">
+    <svg class="map-routes" viewBox="0 0 ${mapLayout.width} ${mapLayout.height}" preserveAspectRatio="none" aria-hidden="true">
+      ${C.stores.map(store => {
+        const point=mapLayout.stores[store.id];
+        return `<line data-route="${esc(store.id)}" x2="${point.x}" y2="${point.y}"/>`;
+      }).join('')}
+    </svg>
+    ${C.stores.map(store => `<button type="button" class="map-store" data-map-store="${esc(store.id)}"
+      style="${mapPosition(mapLayout.stores[store.id])}" aria-label="選擇${esc(store.name)}">
+      <span class="map-star" aria-hidden="true">★</span><span class="map-label">${esc(store.name.replace(/^深圳/,''))}</span></button>`).join('')}
+    <span class="map-port" id="map-port"><span class="map-label"></span></span>`;
+  $('store-map').onclick = event => {
+    const button = event.target.closest('[data-map-store]');
+    if (button) selectStore(button.dataset.mapStore);
+  };
+}
+function updateMap(port) {
+  const point = mapLayout.ports[port.id];
+  const marker = $('map-port');
+  marker.style.cssText = mapPosition(point);
+  marker.querySelector('.map-label').textContent = port.name;
+  $('store-map').querySelectorAll('[data-map-store]').forEach(button =>
+    button.setAttribute('aria-pressed', String(button.dataset.mapStore === state.store)));
+  $('store-map').querySelectorAll('[data-route]').forEach(line => {
+    line.setAttribute('x1',point.x);
+    line.setAttribute('y1',point.y);
+    line.classList.toggle('selected',line.dataset.route === state.store);
+  });
+}
+initStoreDiagram();
 function route() {
   if($('store')) $('store').value=state.store; $('port').value=state.port;
   $('route-price').textContent=C.stores.find(s=>s.id===state.store).name+' 採購';
@@ -64,8 +140,8 @@ function route() {
   const selected=routes.find(p=>p.id===state.port);
   $('port').innerHTML=options(routes.map((p,i)=>({...p,name:p.name+(i===0?' · 推薦':'')})),state.port);
   $('route-description').textContent=selected.name+' · 約 '+selected.km.toFixed(1)+' km，直線距離';
-  renderStoreCards(routes,selected); updateMap(routes,selected);
-  const count=state.cart.reduce((sum,l)=>sum+l.quantity,0);
+  renderStoreCards(); updateMap(selected);
+  const count=state.cart.reduce((sum,l)=>sum+l.quantity*l.units/E.saleSpec(C.products.find(p=>p.id===l.productId)).units,0);
   $('cart-count').textContent=count; $('floating-cart-count').textContent=count;
   $('cart-open').setAttribute('aria-label','打開購物車，目前共 '+count+' 件商品'); $('floating-cart').setAttribute('aria-label','打開購物袋，目前共 '+count+' 件商品');
   $('bag-count').textContent=count+' 件商品';
@@ -75,18 +151,14 @@ function route() {
 function breakdown(q) {
   const rate=Number.isFinite(q.rateBps)?'（'+q.rateBps/100+'%）':'';
   return '<div class="summary">'+[['商品小計',q.product],['服務費'+rate,q.service],['分裝費',q.packaging],['合計',q.total]]
-    .map(([label,value],i)=>'<div class="'+(i===3?'total':'')+'"><span>'+label+'</span><strong>'+fmt(value)+'</strong></div>').join('')+'</div>';
+    .map(([label,value],i)=>'<div class="'+(i===3?'total':'')+'"><span>'+label+'</span><strong>'+fmt(value,q.currency||'CNY')+'</strong></div>').join('')+'</div>';
 }
 function options(list,selected) {
   return list.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===selected?'selected':'')+'>'+esc(x.name)+'</option>').join('');
 }
 $('store').innerHTML=options(C.stores,state.store);
 $('port').innerHTML=options(C.ports,state.port);
-$('store').onchange=()=>{
-  try { checkCart(state.cart,$('store').value);state.store=$('store').value;state.port=E.routes(C.stores.find(x=>x.id===state.store),C.ports)[0].id;save();renderProducts(); }
-  catch(e){toast(e.message);}
-  route();
-};
+$('store').onchange=()=>selectStore($('store').value);
 $('port').onchange=()=>{state.port=$('port').value;save();route();};
 function art(p, thumbnail=false){return `<div class="art ${esc(p.art)}" style="--tone:${esc(p.color)}">${thumbnail?'':'<span class="stock">可選示例庫存 '+remaining(p)+' '+esc(p.unit)+'</span>'}<div class="pack"><small>PORTPICK</small><b>${esc(p.english)}</b><small>EVERYDAY GOODS</small></div></div>`;}
 function renderCategories(){const cats=['全部',...new Set(C.products.map(p=>p.category))];$('categories').innerHTML=cats.map(c=>`<button data-category="${c}" class="${c===category?'active':''}" aria-pressed="${c===category}">${c}</button>`).join('');$('categories').querySelectorAll('button').forEach(b=>b.onclick=()=>{category=b.dataset.category;renderCategories();renderProducts();});}
@@ -97,27 +169,113 @@ function renderProducts(){const query=$('search').value.trim().toLowerCase();
  const match=text=>Array.from(text).some((_,i)=>collator.compare(text.slice(i,i+query.length),query)===0);
  let list=C.products.filter(p=>(category==='全部'||p.category===category)&&(!query||
    [p.name,p.english,p.category,searchAliases[p.id]].some(text=>text&&match(text))) && (!query||remaining(p)>0));
- $('results').textContent=list.length+' 款商品';const low=p=>E.money(p.price*p.sizes[0]/p.packUnits);if(sort!=='recommended')list.sort((a,b)=>(low(a)-low(b))*(sort==='asc'?1:-1));$('products').innerHTML=list.map(p=>`<article class="product-card">${art(p)}<h3>${p.name}</h3><p>${p.english}</p><p>${p.sizes.join(' / ')} 個完整單位 · ${p.unit}</p><div class="product-bottom"><strong>${fmt(low(p))}<small> 起</small></strong><button data-product="${p.id}" ${remaining(p)===0?'disabled':''}>${remaining(p)?'選擇規格 ＋':'此店暫無示例庫存'}</button></div></article>`).join('') || '<div class="empty">此門店沒有符合的商品。<br><button id="clear-search" class="button light">清除搜尋</button></div>';
+ $('results').textContent=list.length+' 款商品';const low=p=>E.money(p.price*E.saleSpec(p).units/p.packUnits);if(sort!=='recommended')list.sort((a,b)=>(low(a)-low(b))*(sort==='asc'?1:-1));$('products').innerHTML=list.map(p=>`<article class="product-card">${art(p)}<h3>${p.name}</h3><p>${p.english}</p><p>採購規格 ${p.packUnits} × ${p.unit} · 按${E.saleSpec(p).label}選購</p><div class="product-bottom"><strong>${fmt(low(p))}<small>／${E.saleSpec(p).label}</small></strong><button data-product="${p.id}" ${remaining(p)===0?'disabled':''}>${remaining(p)?'選擇規格 ＋':'此店暫無示例庫存'}</button></div></article>`).join('') || '<div class="empty">此門店沒有符合的商品。<br><button id="clear-search" class="button light">清除搜尋</button></div>';
  $('clear-search')?.addEventListener('click',()=>{$('search').value='';renderProducts();$('search').focus();});
  $('products').querySelectorAll('[data-product]').forEach(b=>b.onclick=()=>showProduct(b.dataset.product));}
 $('sort').onchange=()=>{sort=$('sort').value;renderProducts();};
-function showProduct(id){const p=C.products.find(x=>x.id===id);track('product_viewed',{product:id});$('product-detail').innerHTML=`<p class="eyebrow">SEALED UNITS ONLY</p><h2>${p.name}</h2><p class="muted">${p.english} · 示例商品，非已核實的山姆商品清單</p><div class="detail-art">${art(p)}</div><div class="form-grid"><label>完整單位組合<select id="detail-units">${p.sizes.map(n=>`<option value="${n}">${n} × ${p.unit} · ${fmt(E.money(p.price*n/p.packUnits))}</option>`).join('')}</select></label><label>外包裝<select id="detail-package">${C.packaging.map(x=>`<option value="${x.id}">${x.name} · ${fmt(x.fee)}</option>`).join('')}</select></label></div><p class="fine">不打開原廠密封包裝；拆售完整單位的供應安排仍待確認。價格按示例原包價格分攤。</p><div id="detail-total"></div><button class="button dark" id="detail-add">加入購物袋 ＋</button><p class="fine">服務費按整單商品小計計算。入境資格需自行逐項查閱官方資訊。</p>`;
- const update=()=>{const price=E.money(p.price*Number($('detail-units').value)/p.packUnits),pack=C.packaging.find(x=>x.id===$('detail-package').value);$('detail-total').innerHTML=`<p>此規格 ${fmt(price+pack.fee)} <span class="fine">（未含整單服務費）</span></p>`;};$('detail-units').onchange=update;$('detail-package').onchange=update;update();$('detail-add').onclick=()=>{try {const units=Number($('detail-units').value),packaging=$('detail-package').value;if(!p.sizes.includes(units)||!C.packaging.some(x=>x.id===packaging))throw Error('商品規格無效');const next=E.add(state.cart,{productId:id,units,packaging});checkCart(next);state.cart=next;save();route();track('cart_added',{product:id});$('product-dialog').close();toast('商品已加入購物車',true);}catch(e){toast(e.message);}};open('product-dialog');}
+function estimatedPickup() {
+  try {return E.deliverySelection(state.deliveryMode||'asap',new Date(),state.deliveryStart).estimatedDeliveryAt;}
+  catch {return null;}
+}
+function dateText(entry) {
+  return entry.days===null?'日期待確認':entry.days<0?'預計取貨日已晚於包裝標示日期 '+entry.batch.markedDate:
+    '預計取貨時距離包裝標示日期還有 '+entry.days+' 天（'+entry.batch.markedDate+'）';
+}
+function adviceView(cart, pickup, context) {
+  const advice=E.shelfAdvice(C,cart,pickup);
+  if (!advice.entries.length) return '';
+  const signature=JSON.stringify(advice);
+  const retained=state.keptAdvice===signature;
+  const lines=advice.entries.map(e=>`<li>${esc(e.name)} · ${e.quantity} ${esc(e.label)}<br>${dateText(e)}${e.batch?.demo?' · 演示日期資料':''}</li>`).join('');
+  return `<section class="shelf-advice" aria-label="日期與數量提示"><h3>日期與數量提示</h3>
+    <p>預計自提日期 · ${esc(advice.pickup||'待確認')}（香港時間）</p><ul>${lines}</ul>
+    ${advice.expired.length?'<p class="error">請更換批次、商品或自提安排。這些批次的標示日期早於預計自提日，調整後可提交訂單。</p>':''}
+    ${advice.reminders.length?`<div class="quantity-reminder"><strong>${advice.combined?'多款短保商品累計提醒':'單品數量提醒'}</strong>
+    <p>${advice.reminders.map(e=>`${esc(e.name)} ${e.quantity} ${esc(e.label)}，取貨時剩 ${e.days} 天`).join('；')}。需要調整數量嗎？</p>
+    <p class="fine">這是課堂演示規則，供購物規劃參考。</p>
+    <div class="inline-buttons"><button type="button" class="button light" data-adjust="${context}">調整數量</button>
+    <button type="button" class="button light" data-keep ${retained?'disabled':''}>${retained?'已保留目前數量':'保留目前數量'}</button></div>
+    ${advice.reminders.some(e=>E.alternatives(C,e.id,pickup,remaining).length)?'<button type="button" class="text-button" data-other>查看其他選擇</button><div class="alternatives" hidden></div>':''}</div>`:''}</section>`;
+}
+function bindAdvice(root,cart,pickup,context) {
+  root.querySelector('[data-adjust]')?.addEventListener('click',()=>{
+    if(context==='review') {$('review-dialog').close();renderCart();open('cart-dialog');}
+    const target=context==='product'?$('detail-quantity'):document.querySelector('[data-cart-quantity]');
+    target?.focus();target?.scrollIntoView({block:'center'});
+  });
+  root.querySelector('[data-keep]')?.addEventListener('click',e=>{
+    state.keptAdvice=JSON.stringify(E.shelfAdvice(C,cart,pickup));save();e.target.textContent='已保留目前數量';e.target.disabled=true;
+  });
+  root.querySelector('[data-other]')?.addEventListener('click',()=>{
+    const advice=E.shelfAdvice(C,cart,pickup), candidates=new Map();
+    for(const e of advice.reminders) for(const p of E.alternatives(C,e.id,pickup,remaining)) candidates.set(p.id,p);
+    const box=root.querySelector('.alternatives');box.hidden=false;
+    box.innerHTML=[...candidates.values()].map(p=>`<button class="button light" data-alternative="${esc(p.id)}">${esc(p.name)} · ${p.batch?.demo?'演示資料 · ':''}剩 ${E.daysRemaining(p,pickup)} 天</button>`).join('');
+    box.querySelectorAll('[data-alternative]').forEach(b=>b.onclick=()=>{
+      if(context==='review') {$('review-dialog').close();renderCart();open('cart-dialog');}
+      showProduct(b.dataset.alternative);
+    });
+  });
+}
+function showProduct(id, editIndex=null) {
+  const product=C.products.find(p=>p.id===id), sale=E.saleSpec(product);
+  const index=editIndex??state.cart.findIndex(l=>l.productId===id);
+  const existing=state.cart[index];
+  const nextCart=()=>{
+    const line={productId:id,saleVersion:2,units:sale.units,quantity:Number($('detail-quantity').value),
+      packaging:$('detail-package').value,packagingQuantity:existing?.packagingQuantity||1};
+    const next=state.cart.map(l=>({...l}));if(index>=0)next[index]=line;else next.push(line);return next;
+  };
+  $('product-detail').innerHTML=`<h2>${esc(product.name)}</h2><p class="muted">${esc(product.english)}</p>
+    <div class="detail-art">${art(product)}</div><p>採購規格 · ${product.packUnits} × ${esc(product.unit)}</p>
+    <p><strong>${fmt(E.money(product.price*sale.units/product.packUnits))}／${esc(sale.label)}</strong> · 最小可售單位 ${sale.units} × ${esc(product.unit)}</p>
+    <label for="detail-quantity">購買數量（${esc(sale.label)}）</label><div class="quantity unit-picker">
+    <button id="detail-minus" aria-label="減少一個單位">−</button><input id="detail-quantity" type="number" min="1" max="${sale.maxQuantity}" step="1" value="${existing?.quantity||1}"><span>${esc(sale.label)}</span><button id="detail-plus" aria-label="增加一個單位">＋</button></div>
+    <div class="inline-buttons">${product.sizes.filter(n=>n%sale.units===0).map(n=>`<button class="button light" data-quick="${n/sale.units}">${n/sale.units} ${esc(sale.label)}</button>`).join('')}</div>
+    <label>外包裝<select id="detail-package">${options(C.packaging,existing?.packaging||'original')}</select></label>
+    <p class="fine">分裝費按本商品行的外包裝份數計收，可在購物袋調整。</p><div id="detail-total"></div><div id="product-advice"></div>
+    <p id="quantity-error" role="alert" class="error"></p><button class="button dark" id="detail-add">${existing?'更新購物袋':'加入購物袋'}</button>`;
+  const update=()=>{
+    const quantity=Number($('detail-quantity').value);
+    $('detail-minus').disabled=quantity<=1;
+    $('detail-plus').disabled=quantity>=Math.min(sale.maxQuantity,Math.floor(remaining(product)/sale.units));
+    try {
+      const cart=nextCart(), q=checkCart(cart), line=q.lines[index>=0?index:q.lines.length-1];
+      $('detail-total').textContent=quantity+' '+sale.label+' · 商品小計 '+fmt(line.productAmount)+' · 分裝費 '+fmt(line.packagingAmount);
+      $('quantity-error').textContent='';$('detail-add').disabled=false;
+      $('product-advice').innerHTML=adviceView(cart,estimatedPickup(),'product');bindAdvice($('product-advice'),cart,estimatedPickup(),'product');
+    } catch(e){$('quantity-error').textContent=e.message;$('detail-add').disabled=true;$('product-advice').innerHTML='';}
+  };
+  $('detail-plus').onclick=()=>{$('detail-quantity').value=Number($('detail-quantity').value)+1;update();};
+  $('detail-minus').onclick=()=>{$('detail-quantity').value=Math.max(1,Number($('detail-quantity').value)-1);update();};
+  $('detail-quantity').oninput=update;$('detail-package').onchange=update;
+  document.querySelectorAll('[data-quick]').forEach(b=>b.onclick=()=>{$('detail-quantity').value=b.dataset.quick;update();});
+  $('detail-add').onclick=()=>{try{const cart=nextCart();checkCart(cart);state.cart=cart;save();route();
+    $('product-dialog').close();if($('cart-dialog').open)renderCart();toast('購物袋已更新',true);
+  }catch(e){$('quantity-error').textContent=e.message;}};
+  update();open('product-dialog');
+}
+function cartPickupPicker() {
+  const slots=E.deliverySlots().slots;
+  return `<label class="cart-pickup">預計自提時間（香港時間）<select id="cart-pickup"><option value="">盡快送達 · ${timeText(E.deliverySlots().asap?.start)}</option>
+    ${slots.map(s=>`<option value="${s.start}" ${state.deliveryMode==='scheduled'&&state.deliveryStart===s.start?'selected':''}>${timeText(s.start)}</option>`).join('')}</select></label>`;
+}
 
 function renderCart() {
   const q=E.quote(C,state.store,state.port,state.cart);
   const rows=q.lines.map((l,i)=>{
     const product=C.products.find(p=>p.id===l.productId);
-    const sizes=product.sizes.map(n=>({id:String(n),name:n+' × '+product.unit}));
-    return `<div class="cart-line"><div><h3>${esc(l.name)}</h3><div class="order-choices">
-      <label>份量<select data-size="${i}">${options(sizes,String(l.units))}</select></label>
-      <label>分裝選項<select data-pack="${i}">${options(C.packaging,l.packaging)}</select></label>
-      </div><p>所選份量單價 ${fmt(l.unitPrice)} · 每組分裝費 ${fmt(l.packagingUnitPrice)}</p></div>
-      <div class="quantity"><button data-delta="-1" data-line="${i}" aria-label="減少數量">−</button>${l.quantity}
-      <button data-delta="1" data-line="${i}" aria-label="增加數量">＋</button>
-      <button data-line="${i}" data-remove aria-label="移除商品">×</button></div></div>`;
+    const sale=E.saleSpec(product);
+    return `<div class="cart-line"><div><h3>${esc(l.name)}</h3><p>採購規格 ${product.packUnits} × ${esc(product.unit)} · ${fmt(l.unitPrice)}／${esc(sale.label)}</p>
+      <div class="order-choices"><label>分裝選項<select data-pack="${i}">${options(C.packaging,l.packaging)}</select></label>
+      <label>外包裝份數<input type="number" min="1" max="100" step="1" data-pack-count="${i}" value="${l.packagingQuantity}"></label></div>
+      <p>商品小計 ${fmt(l.productAmount)} · 分裝費 ${fmt(l.packagingAmount,l.currency||'CNY')}</p></div>
+      <div class="quantity unit-picker"><button data-delta="-1" data-line="${i}" ${l.quantity===1?'disabled':''} aria-label="減少${esc(l.name)}">−</button>
+      <input aria-label="${esc(l.name)}數量" data-cart-quantity="${i}" type="number" min="1" max="${sale.maxQuantity}" step="1" value="${l.quantity}"><span>${esc(sale.label)}</span>
+      <button data-delta="1" data-line="${i}" aria-label="增加${esc(l.name)}">＋</button>
+      <button class="remove-item" data-line="${i}" data-remove>移除</button></div></div>`;
   }).join('');
-  $('cart-content').innerHTML=(rows||'<p class="empty">購物袋是空的。請先選擇商品。</p>')+breakdown(q)+
+  $('cart-content').innerHTML=(rows||'<p class="empty">購物袋是空的。請先選擇商品。</p>')+cartPickupPicker()+'<div id=cart-advice>'+adviceView(state.cart,estimatedPickup(),'cart')+'</div>'+breakdown(q)+
     `<fieldset class="campus-card"><legend>選擇香港校園自提點</legend>
     ${C.stage1.campuses.map(c=>`<label class="choice"><input type="radio" name="campus" value="${esc(c.id)}" ${state.campus===c.id?'checked':''}>
       <span><strong>${esc(c.name)}</strong><small>${esc(c.location)}</small>${c.simulated?'<em>模擬自提點</em>':''}</span></label>`).join('')}
@@ -128,17 +286,20 @@ function renderCart() {
   document.querySelectorAll('[name=campus]').forEach(radio=>radio.onchange=()=>{
     state.campus=radio.value;save();$('campus-note').textContent='';
   });
-  function update(i,change) {
+  $('cart-pickup').onchange=()=>{state.deliveryStart=$('cart-pickup').value||null;state.deliveryMode=state.deliveryStart?'scheduled':'asap';save();renderCart();};
+  bindAdvice($('cart-advice'),state.cart,estimatedPickup(),'cart');
+  function update(i,change,remove=false) {
     const next=state.cart.map(l=>({...l}));
     Object.assign(next[i],change);
-    const kept=next.filter(l=>l.quantity>0);
+    const kept=remove?next.filter((_,index)=>index!==i):next;
     try {checkCart(kept);state.cart=kept;save();route();renderCart();}
     catch(e){renderCart();$('cart-error').textContent=e.message;}
   }
-  $('cart-content').querySelectorAll('[data-size]').forEach(b=>b.onchange=()=>update(+b.dataset.size,{units:+b.value}));
+  $('cart-content').querySelectorAll('[data-cart-quantity]').forEach(b=>b.onchange=()=>update(+b.dataset.cartQuantity,{quantity:+b.value}));
+  $('cart-content').querySelectorAll('[data-pack-count]').forEach(b=>b.onchange=()=>update(+b.dataset.packCount,{packagingQuantity:+b.value}));
   $('cart-content').querySelectorAll('[data-pack]').forEach(b=>b.onchange=()=>update(+b.dataset.pack,{packaging:b.value}));
   $('cart-content').querySelectorAll('[data-line]').forEach(b=>b.onclick=()=>update(+b.dataset.line,{
-    quantity:b.hasAttribute('data-remove')?0:state.cart[+b.dataset.line].quantity+Number(b.dataset.delta)}));
+    quantity:state.cart[+b.dataset.line].quantity+Number(b.dataset.delta||0)},b.hasAttribute('data-remove')));
   $('review').onclick=()=>{
     if(!C.stage1.campuses.some(c=>c.id===state.campus)){ $('campus-note').textContent='請先選擇香港校園自提點。';document.querySelector('[name=campus]')?.focus();return;}
     if(!account){showAccount(true);return;}
@@ -151,22 +312,22 @@ const payments=['微信支付','支付寶','AlipayHK','銀聯／銀行卡'];
 function thresholdNote(q){
   const t=q.threshold;
   return `<div class="threshold"><p>商品小計 ${fmt(q.product)} ≈ HKD ${t.subtotalHKD.toFixed(2)}</p>
-    <small>課堂演示匯率 · 1 CNY = ${Number(t.rate).toFixed(Math.max(2,String(t.rate).split('.')[1]?.length||0))} HKD</small>
+    <small>${q.currency==='HKD'?'HKD 演示商品 · 換算比率 1 HKD = ':'課堂演示匯率 · 1 CNY = '}${Number(t.rate).toFixed(Math.max(2,String(t.rate).split('.')[1]?.length||0))} HKD</small>
     <strong>${t.shortHKD?'未達到起送金額 HKD '+t.minimumHKD.toFixed(2)+'，還差 HKD '+t.shortHKD.toFixed(2)+'。':'已達起送門檻 HKD '+t.minimumHKD.toFixed(2)}</strong></div>`;
 }
-let selectedDeliveryMode='asap', selectedDeliveryStart=null;
+let selectedDeliveryMode=state.deliveryMode||'asap', selectedDeliveryStart=state.deliveryStart||null;
 function showReview() {
   const q=checkCart(state.cart), campus=C.stage1.campuses.find(x=>x.id===state.campus);
   if(!q.lines.length||!campus||q.threshold.shortHKD)throw Error('請確認商品與校園自提點');
   const owner=account, draft=state.draftId, snapshot=JSON.stringify(q);
   $('cart-dialog').close();
-  selectedDeliveryMode='asap'; selectedDeliveryStart=null; const delivery=E.deliverySlots();
-  $('review-content').innerHTML=`<h2>確認費用並下單</h2><p>${esc(q.store.name)} 採購 → <strong>${esc(campus.name)}</strong></p><section class="delivery-picker"><h3>Delivery Time / 預計送達時間</h3><p class="fine">預計到達所選校園自提點或預約到點時間，不代表送到宿舍。時間僅供課堂演示參考。</p><div class="delivery-modes"><label class="choice"><input type="radio" name="delivery-mode" value="asap" checked><span><strong>盡快送達 · 預計約 5 小時</strong><small id="asap-estimate"></small></span></label><label class="choice"><input type="radio" name="delivery-mode" value="scheduled"><span><strong>預約送達</strong><small>選擇日期與 30 分鐘時段</small></span></label></div><p id="after-hours-note" class="alert" hidden>目前不在服務時段，預計次日送達。</p><div id="schedule-panel" hidden></div><p id="delivery-summary"></p><p class="fine">預計時間僅供課堂演示參考，並非實際物流承諾。</p></section>
-    <section class="checkout-items" aria-label="商品明細">${q.lines.map(l=>`<article class="checkout-item"><div class="checkout-thumb" aria-hidden="true">${l.image?.art?art(l.image,true):'<span>▧</span>'}</div><div class="checkout-item-info"><details class="checkout-item-name"><summary>${esc(l.name)}</summary><div>${esc(l.name)}</div></details><p>規格：${l.units} × ${esc(l.unit)}</p><p>數量：${l.quantity}</p><p>分裝：${esc(l.packagingName||'未記錄')}</p></div><strong class="checkout-item-price">${fmt(l.productAmount)}</strong></article>`).join('')}</section>
-    ${breakdown(q)}${thresholdNote(q)}<fieldset class="payment"><legend>付款方式 · 課堂模擬支付</legend>
+  selectedDeliveryMode=state.deliveryMode||'asap'; selectedDeliveryStart=state.deliveryStart||null; const delivery=E.deliverySlots();
+  $('review-content').innerHTML=`<h2>確認費用並下單</h2><p>${esc(q.store.name)} 採購 → <strong>${esc(campus.name)}</strong></p><section class="delivery-picker"><h3>Delivery Time / 預計送達時間</h3><p class="fine">預計到達所選校園自提點或預約到點時間，不代表送到宿舍。時間僅供課堂演示參考。</p><div class="delivery-modes"><label class="choice"><input type="radio" name="delivery-mode" value="asap" ${selectedDeliveryMode==='asap'?'checked':''}><span><strong>盡快送達 · 預計約 5 小時</strong><small id="asap-estimate"></small></span></label><label class="choice"><input type="radio" name="delivery-mode" value="scheduled" ${selectedDeliveryMode==='scheduled'?'checked':''}><span><strong>預約送達</strong><small>選擇日期與 30 分鐘時段</small></span></label></div><p id="after-hours-note" class="alert" hidden>目前不在服務時段，預計次日送達。</p><div id="schedule-panel" hidden></div><p id="delivery-summary"></p><p class="fine">預計時間僅供課堂演示參考，並非實際物流承諾。</p></section>
+    <section class="checkout-items" aria-label="商品明細">${q.lines.map(l=>`<article class="checkout-item"><div class="checkout-thumb" aria-hidden="true">${l.image?.art?art(l.image,true):'<span>▧</span>'}</div><div class="checkout-item-info"><details class="checkout-item-name"><summary>${esc(l.name)}</summary><div>${esc(l.name)}</div></details><p>採購規格：${l.purchaseUnits} × ${esc(l.unit)}</p><p>購買數量：${l.quantity} ${esc(l.saleLabel)}</p><p>單價：${fmt(l.unitPrice)}／${esc(l.saleLabel)}</p><p>分裝：${esc(l.packagingName||'未記錄')}</p></div><strong class="checkout-item-price">${fmt(l.productAmount,l.currency||'CNY')}</strong></article>`).join('')}</section>
+    <div id="review-advice"></div>${breakdown(q)}${thresholdNote(q)}<fieldset class="payment"><legend>付款方式 · 課堂模擬支付</legend>
     ${payments.map((p,i)=>`<label class="choice"><input type="radio" name="payment" value="${p}" ${i===0?'checked':''}><span>${p}</span></label>`).join('')}</fieldset><p class="fine">演示帳號 ${esc(account)} · 課堂模擬付款</p>
     <p id="checkout-error" role="alert" class="error"></p><div class="inline-buttons"><button id="confirm-order" class="button dark">確認模擬付款並下單</button><button id="edit-cart" class="button light">返回購物袋</button></div>`;
-  const renderDelivery=()=>{const choices=E.deliverySlots();const mode=document.querySelector('[name=delivery-mode]:checked')?.value||'asap';selectedDeliveryMode=mode;const asap=choices.asap;const asapText=asap?timeText(asap.start):'未來 7 天內無可用時段';$('asap-estimate').textContent='預計 '+asapText+(choices.afterHours?' · 次日服務時段':'');$('after-hours-note').hidden=!choices.afterHours;const panel=$('schedule-panel');if(mode==='scheduled'){const days=[...new Set(choices.slots.map(x=>x.date))];const chosen=choices.slots.find(x=>x.start===selectedDeliveryStart)||choices.slots[0];selectedDeliveryStart=chosen?.start||null;panel.hidden=false;panel.innerHTML=`<label>選擇日期<select id="delivery-date">${days.map((d,i)=>`<option value="${d}" ${chosen?.date===d?'selected':''}>${i===0?'今天':i===1?'明天':d}</option>`).join('')}</select></label><div class="delivery-slots">${choices.slots.filter(x=>x.date===chosen?.date).map(x=>`<button type="button" data-slot="${x.start}" class="slot ${x.start===selectedDeliveryStart?'selected':''}">${timeText(x.start).split(' ')[1]}–${timeText(x.end).split(' ')[1]}</button>`).join('')}</div>`;panel.querySelector('#delivery-date').onchange=e=>{const next=choices.slots.find(x=>x.date===e.target.value);selectedDeliveryStart=next?.start||null;renderDelivery();};panel.querySelectorAll('[data-slot]').forEach(b=>b.onclick=()=>{selectedDeliveryStart=b.dataset.slot;renderDelivery();});}else panel.hidden=true;const chosen=mode==='asap'?asap:choices.slots.find(x=>x.start===selectedDeliveryStart);$('delivery-summary').textContent='下單時間 · '+timeText(new Date().toISOString())+'　預計到點 · '+(chosen?timeText(chosen.start):'請選擇可用時段');};document.querySelectorAll('[name=delivery-mode]').forEach(r=>r.onchange=renderDelivery);renderDelivery();
+  const renderDelivery=()=>{const choices=E.deliverySlots();const mode=document.querySelector('[name=delivery-mode]:checked')?.value||'asap';selectedDeliveryMode=mode;const asap=choices.asap;const asapText=asap?timeText(asap.start):'未來 7 天內無可用時段';$('asap-estimate').textContent='預計 '+asapText+(choices.afterHours?' · 次日服務時段':'');$('after-hours-note').hidden=!choices.afterHours;const panel=$('schedule-panel');if(mode==='scheduled'){const days=[...new Set(choices.slots.map(x=>x.date))];const chosen=choices.slots.find(x=>x.start===selectedDeliveryStart)||choices.slots[0];selectedDeliveryStart=chosen?.start||null;panel.hidden=false;panel.innerHTML=`<label>選擇日期<select id="delivery-date">${days.map((d,i)=>`<option value="${d}" ${chosen?.date===d?'selected':''}>${i===0?'今天':i===1?'明天':d}</option>`).join('')}</select></label><div class="delivery-slots">${choices.slots.filter(x=>x.date===chosen?.date).map(x=>`<button type="button" data-slot="${x.start}" class="slot ${x.start===selectedDeliveryStart?'selected':''}">${timeText(x.start).split(' ')[1]}–${timeText(x.end).split(' ')[1]}</button>`).join('')}</div>`;panel.querySelector('#delivery-date').onchange=e=>{const next=choices.slots.find(x=>x.date===e.target.value);selectedDeliveryStart=next?.start||null;renderDelivery();};panel.querySelectorAll('[data-slot]').forEach(b=>b.onclick=()=>{selectedDeliveryStart=b.dataset.slot;renderDelivery();});}else panel.hidden=true;const chosen=mode==='asap'?asap:choices.slots.find(x=>x.start===selectedDeliveryStart);$('delivery-summary').textContent='下單時間 · '+timeText(new Date().toISOString())+'　預計到點 · '+(chosen?timeText(chosen.start):'請選擇可用時段');state.deliveryMode=mode;state.deliveryStart=selectedDeliveryStart;save();$('review-advice').innerHTML=adviceView(state.cart,chosen?.start,'review');bindAdvice($('review-advice'),state.cart,chosen?.start,'review');};document.querySelectorAll('[name=delivery-mode]').forEach(r=>r.onchange=renderDelivery);renderDelivery();
   $('edit-cart').onclick=()=>{$('review-dialog').close();renderCart();open('cart-dialog');};
   $('confirm-order').onclick=async()=>{
     const button=$('confirm-order');if(!button||button.disabled)return;button.disabled=true;
@@ -180,7 +341,9 @@ function showReview() {
         if(checked.threshold.shortHKD || !payments.includes(payment))throw Error('請核對門檻及付款方式');
         if(JSON.stringify(checked)!==snapshot||state.campus!==campus.id)throw Error('購物資料已更新，請重新確認');
         const deliveryInfo=E.deliverySelection(selectedDeliveryMode,new Date(),selectedDeliveryStart); const at=deliveryInfo.orderedAt;
-        const order={schema:'stage1',id:'PP-'+draft.toUpperCase(),owner,createdAt:at,campus:{...campus},quote:checked,payment,...deliveryInfo,
+        const shelf=E.shelfAdvice(C,state.cart,deliveryInfo.estimatedDeliveryAt);
+        if(shelf.expired.length)throw Error('預計取貨日已晚於批次標示日期，請更換商品或自提安排');
+        const order={schema:'stage1',id:'PP-'+draft.toUpperCase(),owner,createdAt:at,campus:{...campus},quote:checked,payment,shelf,...deliveryInfo,
           pickupCode:Array.from(crypto.getRandomValues(new Uint8Array(8)),v=>'23456789ABCDEFGHJKLMNPQRSTUVWXYZ'[v%32]).join(''),
           history:[{stage:E.stages[0],at}]};
         localStorage.setItem(orderPrefix+draft,JSON.stringify(order));return order;
@@ -259,7 +422,7 @@ function renderOrders(){
   $('orders-list').innerHTML=orders.length?orders.map(o=>`<article class="order-card"><div class="order-top">
     <h3>${esc(o.id||'未記錄')}</h3><span class="badge">${esc(currentStatus(o))}</span></div>
     <p>下單時間 · ${esc(timeText(o.createdAt))}<br>校園自提點 · ${esc(campusName(o))}<br>
-    實付總額（模擬） · <strong>${fmt(o.quote.total)}</strong><br>送達方式 · ${esc(deliveryLabel(o))}<br>預計到點 · ${esc(deliveryText(o))}</p>
+    實付總額（模擬） · <strong>${fmt(o.quote.total,o.quote.currency||'CNY')}</strong><br>送達方式 · ${esc(deliveryLabel(o))}<br>預計到點 · ${esc(deliveryText(o))}</p>
     <button class="button light" data-view="${esc(o.id)}">查看訂單進度</button></article>`).join(''):
     (account?'<p class="empty">此帳號暫無訂單。</p>':'<button id="orders-login" class="button light">登入演示帳號</button>');
   $('orders-login')?.addEventListener('click',()=>showAccount());
@@ -271,10 +434,10 @@ function itemDetails(lines, store){
   const rows=lines.map(l=>`<article class="receipt-row">
     <div class="receipt-thumb" aria-hidden="true">${l.image?.art?art(l.image,true):'<span>▧</span>'}</div>
     <div class="receipt-info"><details class="item-name"><summary>${field(l.name)}</summary><div>${field(l.name)}</div></details>
-    <dl>${[['規格',l.units!=null&&l.unit?field(l.units)+' × '+field(l.unit)+'／組':missing],['數量',field(l.quantity,' 組')],
-    ['單價',fmt(l.unitPrice)+(Number.isFinite(l.unitPrice)?'／組':'')],['分裝',field(l.packagingName)],
-    ['分裝單價',fmt(l.packagingUnitPrice)],['分裝小計',fmt(l.packagingAmount)]].map(([label,value])=>`<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl></div>
-    <strong class="line-money">${fmt(l.productAmount)}</strong></article>`).join('');
+    <dl>${[['規格',l.units!=null&&l.unit?(l.saleVersion===2?field(l.purchaseUnits)+' × '+field(l.unit)+'（採購）':field(l.units)+' × '+field(l.unit)+'／組'):missing],['數量',field(l.quantity,' '+(l.saleVersion===2?l.saleLabel:'組'))],
+    ['單價',fmt(l.unitPrice,l.currency||'CNY')+(Number.isFinite(l.unitPrice)?'／'+(l.saleVersion===2?esc(l.saleLabel):'組'):'')],['分裝',field(l.packagingName)],
+    ['分裝單價',fmt(l.packagingUnitPrice,l.currency||'CNY')],['分裝小計',fmt(l.packagingAmount,l.currency||'CNY')]].map(([label,value])=>`<div><dt>${label}</dt><dd>${value}</dd></div>`).join('')}</dl></div>
+    <strong class="line-money">${fmt(l.productAmount,l.currency||'CNY')}</strong></article>`).join('');
   return `<section class="receipt"><h3>商品明細</h3><p class="receipt-store">採購門店 · ${esc(store||missing)}</p>${rows||missing}</section>`;
 }
 function showDetail(id){
@@ -284,7 +447,7 @@ function showDetail(id){
   if(o.legacy){
     $('order-detail').innerHTML=`<h2>歷史訂單</h2><p class="order-number">${esc(o.id)} · ${esc(o.status)}</p>
       <p>下單時間 · ${esc(timeText(o.createdAt))}<br>採購門店 · ${esc(o.store)}<br>校園自提點 · ${esc(o.campus)}</p>
-      <p>付款方式 · 未記錄<br>送達方式 · ${deliveryLabel(o)}<br>預計到點 · ${deliveryText(o)}</p>${itemDetails(o.lines,o.store)}${breakdown(o.quote)}<p>舊版配送費 · ${fmt(o.oldDelivery)}</p><p class="fine">合計沿用原始記錄。</p>`;
+      <p>付款方式 · 未記錄<br>送達方式 · ${deliveryLabel(o)}<br>預計到點 · ${deliveryText(o)}</p>${itemDetails(o.lines,o.store)}${breakdown(o.quote)}<p>舊版配送費 · ${fmt(o.oldDelivery,'CNY')}</p><p class="fine">合計沿用原始記錄。</p>`;
   }else{
     const ready=o.history.length===3;
     $('order-detail').innerHTML=`<div class="${ready?'pickup-ticket':'summary'}">
@@ -294,7 +457,7 @@ function showDetail(id){
       <ol class="timeline">${E.stages.map((s,i)=>`<li class="${o.history[i]?'done':''}"><strong>${s}</strong><time>${o.history[i]?timeText(o.history[i].at):'待處理'}</time></li>`).join('')}</ol>
       <p class="muted">路線參考 · ${esc(o.quote.port?.name||'未記錄')}<br>付款方式 · ${esc(o.payment||'未記錄')}</p>
       ${itemDetails(o.quote.lines,o.quote.store.name)}
-      ${breakdown(o.quote)}`;
+      ${o.shelf?`<p class="fine">本單預計自提日期 ${esc(o.shelf.pickup)} · ${o.shelf.entries.map(e=>esc(e.name)+'：'+dateText(e)).join('；')}</p>`:''}${breakdown(o.quote)}`;
   }
   open('detail-dialog');$('detail-dialog').scrollTop=0;
 }
@@ -341,8 +504,11 @@ function showTool(which){const box=$('tool-content');if(which==='study'){const c
  }else if(which==='calculator'){box.innerHTML=`<h3>按完整單位估算用量</h3><p class="muted">「每人每週用量」會乘以人數，結果按全戶消耗計算。</p><div class="form-grid"><label>包裝內完整單位<input id="calc-units" type="number" min="1" step="1" value="24"></label><label>每人每週用量<input id="calc-use" type="number" min="0.1" step="0.1" value="4"></label><label>使用人數<input id="calc-people" type="number" min="1" step="1" value="2"></label><label>包裝價格（CNY）<input id="calc-price" type="number" min="0" step="0.01" value="42"></label></div><div id="calc-result" class="summary"></div>`;const calc=()=>{const units=Number($('calc-units').value),use=Number($('calc-use').value),people=Number($('calc-people').value),price=Number($('calc-price').value);$('calc-result').textContent=units>0&&use>0&&Number.isInteger(people)&&people>0&&price>=0?`可用約 ${(units/use/people).toFixed(1)} 週 · 全戶每週 ${fmt(price/(units/use/people))} · 每人每週 ${fmt(price/(units/use))}`:'請輸入有效的正數及整數人數。';};['calc-units','calc-use','calc-people','calc-price'].forEach(id=>$(id).oninput=calc);calc();
  }else{box.innerHTML=`<h3>候選人篩選實驗 · 不提供真實代購</h3><p class="muted">此功能不屬於主要預約流程。候選人全為模擬資料，不會聯絡任何人。按相同口岸、未來兩小時時間窗、足夠載重及報酬篩選。</p><form id="match-form"><div class="form-grid"><label>口岸<select id="match-port">${C.ports.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></label><label>期望時間（香港時間）<input id="match-time" type="datetime-local" required min="${hkNow()}" value="${new Date(Date.now()+8*3600000+86400000).toISOString().slice(0,16)}"></label><label>重量（kg）<input id="match-weight" type="number" required min="0.1" step="0.1" value="3"></label><label>報酬上限（HKD）<input id="match-offer" type="number" required min="0" value="40"></label></div><button class="button dark">查看模擬匹配</button></form><div id="match-results"></div>`;const sampleTime=new Date(Date.now()+86400000).toISOString(),helpers=[{name:'示例同學 A',portId:'luohu',capacity:8,ask:35,time:sampleTime},{name:'示例同學 B',portId:'futian',capacity:15,ask:55,time:sampleTime}];$('match-form').onsubmit=e=>{e.preventDefault();const request={portId:$('match-port').value,time:bookingISO($('match-time').value),weight:Number($('match-weight').value),offer:Number($('match-offer').value)};const result=E.matches(helpers,request);$('match-results').innerHTML=result.length?result.map(h=>`<div class="summary"><strong>${h.name} · 模擬</strong><p>載重 ${h.capacity} kg · 報酬 HKD ${h.ask} · 可用時間 ${esc(new Date(h.time).toLocaleString('zh-HK',{timeZone:'Asia/Hong_Kong'}))}</p><p class="fine">此結果僅測試篩選邏輯，不能聯絡或派單。</p></div>`).join(''):'<div class="alert">暫無符合口岸、時間、重量與報酬條件的模擬候選人。可調整條件重試。</div>';};}}
 
+$('demo-shelf-link').textContent=shelfDemo?'返回一般商品':'課堂演示 · 數量與日期測試';
+$('demo-shelf-link').href=shelfDemo?location.pathname:location.pathname+'?demo=shelf';
+if(shelfDemo) $('shelf-demo-note').textContent='演示商品與固定批次日期 · HKD 計價 · 此演示起送門檻 HK$'+C.stage1.minimumHKD+'。以 '+C.shelfLifeDemo.referencePickupDate+' 自提測試 3／7／8 天邊界。日期可在購物袋更改。';
+$('catalog-count').textContent=C.products.length+' 款示例商品';
 route(); renderCategories(); renderProducts(); renderOrders(); loadLegacy();
-if(window.PORTPICK_MAPS_API_KEY){const mapsScript=document.createElement('script');mapsScript.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(window.PORTPICK_MAPS_API_KEY)+'&callback=initPortPickMap';mapsScript.async=true;mapsScript.onerror=()=>{$('map-config-note').textContent='Google Maps 載入失敗；門店卡片和距離計算仍可使用。';$('map-config-note').hidden=false;};document.head.append(mapsScript);}
 const accountDialog=$('account-dialog');accountDialog.addEventListener('cancel',e=>{if(!account)e.preventDefault();});accountDialog.addEventListener('click',e=>{if(!account&&e.target===accountDialog)e.preventDefault();});accountDialog.addEventListener('close',()=>{if(!account)queueMicrotask(()=>{if(!accountDialog.open)accountDialog.showModal();});});$('account-close').hidden=!account; if(!account)showAccount();
 if(location.protocol!=='file:') {
   fetch('/api/orders',{credentials:'same-origin'}).then(r=>r.ok?r.json():[]).then(rows=>{

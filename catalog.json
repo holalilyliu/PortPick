@@ -19,6 +19,11 @@
       "stock": {
         "futian": 96,
         "qianhai": 72
+      },
+      "sale": {
+        "units": 1,
+        "label": "瓶",
+        "maxQuantity": 100
       }
     },
     {
@@ -40,6 +45,11 @@
       "stock": {
         "futian": 24,
         "qianhai": 0
+      },
+      "sale": {
+        "units": 1,
+        "label": "盒",
+        "maxQuantity": 100
       }
     },
     {
@@ -60,6 +70,11 @@
       "stock": {
         "futian": 8,
         "qianhai": 6
+      },
+      "sale": {
+        "units": 1,
+        "label": "袋",
+        "maxQuantity": 100
       }
     },
     {
@@ -81,6 +96,11 @@
       "stock": {
         "futian": 48,
         "qianhai": 36
+      },
+      "sale": {
+        "units": 1,
+        "label": "包",
+        "maxQuantity": 100
       }
     },
     {
@@ -102,6 +122,11 @@
       "stock": {
         "futian": 48,
         "qianhai": 36
+      },
+      "sale": {
+        "units": 1,
+        "label": "卷",
+        "maxQuantity": 100
       }
     },
     {
@@ -121,6 +146,11 @@
       "stock": {
         "futian": 4,
         "qianhai": 0
+      },
+      "sale": {
+        "units": 1,
+        "label": "瓶",
+        "maxQuantity": 100
       }
     },
     {
@@ -140,6 +170,11 @@
       "stock": {
         "futian": 4,
         "qianhai": 3
+      },
+      "sale": {
+        "units": 1,
+        "label": "袋",
+        "maxQuantity": 100
       }
     },
     {
@@ -160,6 +195,11 @@
       "stock": {
         "futian": 8,
         "qianhai": 6
+      },
+      "sale": {
+        "units": 1,
+        "label": "瓶",
+        "maxQuantity": 100
       }
     },
     {
@@ -179,6 +219,11 @@
       "stock": {
         "futian": 4,
         "qianhai": 3
+      },
+      "sale": {
+        "units": 1,
+        "label": "袋",
+        "maxQuantity": 100
       }
     },
     {
@@ -200,6 +245,11 @@
       "stock": {
         "futian": 40,
         "qianhai": 0
+      },
+      "sale": {
+        "units": 1,
+        "label": "盒",
+        "maxQuantity": 100
       }
     },
     {
@@ -221,6 +271,11 @@
       "stock": {
         "futian": 72,
         "qianhai": 54
+      },
+      "sale": {
+        "units": 1,
+        "label": "袋",
+        "maxQuantity": 100
       }
     },
     {
@@ -241,6 +296,11 @@
       "stock": {
         "futian": 12,
         "qianhai": 9
+      },
+      "sale": {
+        "units": 1,
+        "label": "袋",
+        "maxQuantity": 100
       }
     }
   ],
@@ -331,6 +391,227 @@
       }
     ],
     "minimumHKD": 100,
-    "cnyToHKD": 1.1
+    "cnyToHKD": 1.1,
+    "shelfLife": {
+      "shortDays": 7,
+      "singleQuantity": 4,
+      "combinedProducts": 2,
+      "combinedQuantity": 6
+    }
+  },
+  "shelfLifeDemo": {
+    "currency": "HKD",
+    "minimumHKD": 0,
+    "referencePickupDate": "2026-11-25",
+    "products": [
+      {
+        "id": "demo-drink3",
+        "name": "演示飲品・短保",
+        "english": "Classroom sample drink3",
+        "category": "飲品",
+        "price": 192,
+        "packUnits": 24,
+        "unit": "瓶",
+        "sizes": [
+          1,
+          6,
+          24
+        ],
+        "art": "water",
+        "color": "#e4e9d8",
+        "stock": {
+          "futian": 240,
+          "qianhai": 240
+        },
+        "sale": {
+          "units": 1,
+          "label": "瓶",
+          "maxQuantity": 100
+        },
+        "batch": {
+          "id": "DEMO-20261125-drink3",
+          "markedDate": "2026-11-28",
+          "demo": true
+        }
+      },
+      {
+        "id": "demo-snack3",
+        "name": "演示零食・短保",
+        "english": "Classroom sample snack3",
+        "category": "早餐與零食",
+        "price": 192,
+        "packUnits": 24,
+        "unit": "袋",
+        "sizes": [
+          1,
+          6,
+          24
+        ],
+        "art": "chips",
+        "color": "#e4e9d8",
+        "stock": {
+          "futian": 240,
+          "qianhai": 240
+        },
+        "sale": {
+          "units": 1,
+          "label": "袋",
+          "maxQuantity": 100
+        },
+        "batch": {
+          "id": "DEMO-20261125-snack3",
+          "markedDate": "2026-11-28",
+          "demo": true
+        }
+      },
+      {
+        "id": "demo-drink7",
+        "name": "演示飲品・7天邊界",
+        "english": "Classroom sample drink7",
+        "category": "飲品",
+        "price": 192,
+        "packUnits": 24,
+        "unit": "瓶",
+        "sizes": [
+          1,
+          6,
+          24
+        ],
+        "art": "water",
+        "color": "#e4e9d8",
+        "stock": {
+          "futian": 240,
+          "qianhai": 240
+        },
+        "sale": {
+          "units": 1,
+          "label": "瓶",
+          "maxQuantity": 100
+        },
+        "batch": {
+          "id": "DEMO-20261125-drink7",
+          "markedDate": "2026-12-02",
+          "demo": true
+        }
+      },
+      {
+        "id": "demo-drink8",
+        "name": "演示飲品・較長日期",
+        "english": "Classroom sample drink8",
+        "category": "飲品",
+        "price": 192,
+        "packUnits": 24,
+        "unit": "瓶",
+        "sizes": [
+          1,
+          6,
+          24
+        ],
+        "art": "oat",
+        "color": "#e4e9d8",
+        "stock": {
+          "futian": 240,
+          "qianhai": 240
+        },
+        "sale": {
+          "units": 1,
+          "label": "瓶",
+          "maxQuantity": 100
+        },
+        "batch": {
+          "id": "DEMO-20261125-drink8",
+          "markedDate": "2026-12-03",
+          "demo": true
+        }
+      },
+      {
+        "id": "demo-unknown",
+        "name": "演示飲品・日期待確認",
+        "english": "Classroom sample unknown",
+        "category": "飲品",
+        "price": 192,
+        "packUnits": 24,
+        "unit": "瓶",
+        "sizes": [
+          1,
+          6,
+          24
+        ],
+        "art": "water",
+        "color": "#e4e9d8",
+        "stock": {
+          "futian": 240,
+          "qianhai": 240
+        },
+        "sale": {
+          "units": 1,
+          "label": "瓶",
+          "maxQuantity": 100
+        },
+        "batch": {
+          "id": "DEMO-20261125-unknown",
+          "markedDate": null,
+          "demo": true
+        }
+      },
+      {
+        "id": "demo-expired",
+        "name": "演示飲品・需調整批次",
+        "english": "Classroom sample expired",
+        "category": "飲品",
+        "price": 192,
+        "packUnits": 24,
+        "unit": "瓶",
+        "sizes": [
+          1,
+          6,
+          24
+        ],
+        "art": "water",
+        "color": "#e4e9d8",
+        "stock": {
+          "futian": 240,
+          "qianhai": 240
+        },
+        "sale": {
+          "units": 1,
+          "label": "瓶",
+          "maxQuantity": 100
+        },
+        "batch": {
+          "id": "DEMO-20261125-expired",
+          "markedDate": "2026-11-24",
+          "demo": true
+        }
+      },
+      {
+        "id": "demo-whole",
+        "name": "演示餅乾・整包出售",
+        "english": "Classroom sample whole",
+        "category": "早餐與零食",
+        "price": 8,
+        "packUnits": 1,
+        "unit": "包",
+        "sizes": [
+          1
+        ],
+        "art": "chips",
+        "color": "#e4e9d8",
+        "stock": {
+          "futian": 240,
+          "qianhai": 240
+        },
+        "sale": {
+          "units": 1,
+          "label": "包",
+          "maxQuantity": 100
+        },
+        "batch": {
+          "id": "DEMO-20261125-whole",
+          "markedDate": "2026-12-03",
+          "demo": true
+        }
+      }
+    ]
   }
 }
